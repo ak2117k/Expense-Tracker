@@ -1,69 +1,63 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { getMonthlyReports } from "../api/report.monthly.js";
 
-const Reports = () => {
+const MonthlyReports = () => {
   const [reports, setReports] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // TODO: Replace this with an API call to GET /sql-reports or similar
-    const sampleReports = [
-      {
-        _id: "1",
-        month: "March 2025",
-        totalSpent: 18000,
-        topCategory: "Rent",
-        overbudgetCategories: ["Shopping", "Food"],
-      },
-      {
-        _id: "2",
-        month: "April 2025",
-        totalSpent: 20500,
-        topCategory: "Food",
-        overbudgetCategories: ["Food"],
-      },
-      {
-        _id: "3",
-        month: "May 2025",
-        totalSpent: 19200,
-        topCategory: "Travel",
-        overbudgetCategories: [],
-      },
-    ];
+    const fetchReports = async () => {
+      try {
+        const data = await getMonthlyReports();
+        setReports(data);
+      } catch (err) {
+        console.error("Failed to fetch reports:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    setReports(sampleReports);
+    fetchReports();
   }, []);
 
   return (
     <div className="px-4 py-6 max-w-4xl mx-auto">
       <h2 className="text-2xl font-bold text-indigo-600 mb-6">
-        Monthly Reports
+        Monthly Summary Reports
       </h2>
 
-      {reports.length === 0 ? (
-        <p className="text-gray-600">No reports available yet.</p>
+      {loading ? (
+        <p>Loading...</p>
+      ) : reports.length === 0 ? (
+        <p className="text-gray-600">No reports found.</p>
       ) : (
-        <div className="space-y-4">
-          {reports.map((report) => (
+        <div className="grid gap-4">
+          {reports.map((report, idx) => (
             <div
-              key={report._id}
-              className="bg-white p-6 rounded-xl shadow-md border border-gray-100"
+              key={idx}
+              className="bg-white shadow-md rounded-xl p-4 border border-indigo-100"
             >
               <h3 className="text-lg font-semibold text-indigo-700 mb-2">
-                {report.month}
+                {report.month} {report.year}
               </h3>
-              <p>
-                <span className="font-medium">Total Spent:</span> ₹
-                {report.totalSpent}
+              <p className="text-gray-800 mb-1">
+                <strong>Total Spent:</strong> ₹{report.total_spent}
               </p>
-              <p>
-                <span className="font-medium">Top Category:</span>{" "}
-                {report.topCategory}
+              <p className="text-gray-800 mb-1">
+                <strong>Top Category:</strong> {report.top_category || "N/A"}
               </p>
-              <p>
-                <span className="font-medium">Overbudget Categories:</span>{" "}
-                {report.overbudgetCategories.length > 0
-                  ? report.overbudgetCategories.join(", ")
-                  : "None"}
-              </p>
+              <div>
+                <strong>Overbudget Categories:</strong>
+                {report.overbudgetCategories.length === 0 ? (
+                  <span className="ml-1 text-gray-500">None</span>
+                ) : (
+                  <ul className="list-disc list-inside ml-4 text-sm text-red-600">
+                    {report.overbudgetCategories.map((cat, i) => (
+                      <li key={i}>{cat}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -72,4 +66,4 @@ const Reports = () => {
   );
 };
 
-export default Reports;
+export default MonthlyReports;

@@ -1,8 +1,11 @@
 const Expense = require("../models/expense.model.js");
+const Budget = require("../models/budget.model.js");
 const mongoose = require("mongoose");
 const moment = require("moment");
+const db = require("../config/mysql");
 
-// GET /api/reports/dashboard
+// ------------------ Dashboard Report (MongoDB) ------------------ //
+
 const getDashboardReport = async (req, res) => {
   try {
     const userId = new mongoose.Types.ObjectId(req.user._id);
@@ -57,7 +60,6 @@ const getDashboardReport = async (req, res) => {
       amount: dateMap[date],
     }));
 
-    // Sort trend by date
     trend.sort((a, b) => new Date(a.date) - new Date(b.date));
 
     res.status(200).json({
@@ -73,4 +75,105 @@ const getDashboardReport = async (req, res) => {
   }
 };
 
-module.exports = { getDashboardReport };
+// ------------------ Monthly Reports (MySQL) ------------------ //
+
+const insertMonthlyReport = async (req, res) => {
+  try {
+    const userId = req.user._id.toString();
+    const today = new Date();
+    const month = today.toLocaleString("default", { month: "long" });
+    const year = today.getFullYear();
+
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+    const expenses = await Expense.find({
+      userId,
+      date: { $gte: firstDay, $lte: lastDay },
+    });
+
+    const totalSpent = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+
+    const categoryTotals = {};
+    for (let exp of expenses) {
+      categoryTotals[exp.category] =
+        (categoryTotals[exp.category] || 0) + exp.amount;
+    }
+
+    const topCategory =
+      Object.entries(categoryTotals).sort((a, b) => b[1] - a[1])[0]?.[0] || "";
+
+    const budgets = await Budget.find({ userId });
+    const overbudgetCategories = budgets
+      .filter((b) => categoryTotals[b.category] > b.limit)
+      .map((b) => b.category);
+
+    // Insert into MySQL
+    await db.query(
+      `INSERT INTO monthly_reports 
+       (user_id, month, year, total_spent, top_category, overbudget_categories)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        userId,
+        month,
+        year,
+        totalSpent,
+        topCategory,
+        JSON.stringify(overbudgetCategories),
+      ]
+    );
+
+    res.status(200).json({ message: "Monthly report inserted successfully" });
+  } catch (err) {
+    console.error("Error inserting monthly report:", err);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+const getMonthlyReports = async (req, res) => {
+  try {
+    console.log("get monthly reports hitted");
+
+    const userId = "12345";
+
+    const [rows] = await db.query(
+      `SELECT month, year, total_spent, top_category, overbudget_categories
+       FROM monthly_reports
+       WHERE user_id = ?
+       ORDER BY year DESC, 
+                FIELD(month, 'January','February','March','April','May','June','July','August','September','October','November','December')
+       LIMIT 3`,
+      [userId]
+    );
+
+    const formatted = rows.map((row) => ({
+      ...row,
+      overbudgetCategories: (() => {
+        try {
+          return JSON.parse(row.overbudget_categories || "[]");
+        } catch (e) {
+          console.warn(
+            "⚠️ Invalid JSON in overbudget_categories:",
+            row.overbudget_categories
+          );
+          return [];
+        }
+      })(),
+    }));
+
+    console.log("formatted data", formatted);
+
+    res.status(200).json(formatted);
+  } catch (err) {
+    console.error("Error fetching reports:", err);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+// ------------------ Export All ------------------ //
+
+module.exports = {
+  getDashboardReport,
+  insertMonthlyReport,
+  getMonthlyReports,
+};
