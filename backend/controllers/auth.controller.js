@@ -41,7 +41,7 @@ const login = async (req, res) => {
       httpOnly: true,
       maxAge: 3 * 24 * 60 * 60 * 1000,
       sameSite: "None",
-      secure: process.env.NODE_ENV === "production",
+      secure: true,
     });
 
     res.status(200).json({ user, token });
