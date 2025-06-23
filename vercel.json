@@ -2,21 +2,21 @@
   "version": 2,
   "builds": [
     {
-      "src": "./backend/server.js",
+      "src": "backend/server.js",
       "use": "@vercel/node",
       "config": {
         "maxDuration": 60
       }
     },
     {
-      "src": "./frontend/dist/**/*",
+      "src": "frontend/dist/**",
       "use": "@vercel/static"
     }
   ],
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "/backend/server.js"
+      "dest": "backend/server.js"
     },
     {
       "src": "/assets/(.*)",
