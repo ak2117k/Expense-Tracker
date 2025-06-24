@@ -27,6 +27,7 @@ const MonthlyReports = () => {
     const fetchReport = async () => {
       try {
         const data = await getMonthlyReports();
+        console.log(data);
         setReport(data);
       } catch (err) {
         console.error("Error fetching report", err);
