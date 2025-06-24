@@ -130,43 +130,113 @@ const insertMonthlyReport = async (req, res) => {
   }
 };
 
+// const getMonthlyReports = async (req, res) => {
+//   try {
+//     console.log("get monthly reports hitted");
+
+//     const userId = "12345";
+
+//     const [rows] = await db.query(
+//       `SELECT month, year, total_spent, top_category, overbudget_categories
+//        FROM monthly_reports
+//        WHERE user_id = ?
+//        ORDER BY year DESC,
+//                 FIELD(month, 'January','February','March','April','May','June','July','August','September','October','November','December')
+//        LIMIT 3`,
+//       [userId]
+//     );
+
+//     const formatted = rows.map((row) => ({
+//       ...row,
+//       overbudgetCategories: (() => {
+//         try {
+//           return JSON.parse(row.overbudget_categories || "[]");
+//         } catch (e) {
+//           console.warn(
+//             "⚠️ Invalid JSON in overbudget_categories:",
+//             row.overbudget_categories
+//           );
+//           return [];
+//         }
+//       })(),
+//     }));
+
+//     console.log("formatted data", formatted);
+
+//     res.status(200).json(formatted);
+//   } catch (err) {
+//     console.error("Error fetching reports:", err);
+//     res.status(500).json({ message: "Internal Server Error" });
+//   }
+// };
+
+//Monthly Reports using MongoDb
+
 const getMonthlyReports = async (req, res) => {
   try {
-    console.log("get monthly reports hitted");
+    const userId = req.user._id;
 
-    const userId = "12345";
+    const currentMonth = moment().format("MMMM");
+    const year = moment().year();
+    const startOfMonth = moment().startOf("month").toDate();
+    const endOfMonth = moment().endOf("month").toDate();
 
-    const [rows] = await db.query(
-      `SELECT month, year, total_spent, top_category, overbudget_categories
-       FROM monthly_reports
-       WHERE user_id = ?
-       ORDER BY year DESC, 
-                FIELD(month, 'January','February','March','April','May','June','July','August','September','October','November','December')
-       LIMIT 3`,
-      [userId]
-    );
+    // Fetch current month expenses
+    const expenses = await Expense.find({
+      userId,
+      date: { $gte: startOfMonth, $lte: endOfMonth },
+    });
 
-    const formatted = rows.map((row) => ({
-      ...row,
-      overbudgetCategories: (() => {
-        try {
-          return JSON.parse(row.overbudget_categories || "[]");
-        } catch (e) {
-          console.warn(
-            "⚠️ Invalid JSON in overbudget_categories:",
-            row.overbudget_categories
-          );
-          return [];
-        }
-      })(),
-    }));
+    // Fetch all budgets
+    const budgets = await Budget.find({ userId });
 
-    console.log("formatted data", formatted);
+    const expenseMap = {};
+    expenses.forEach((exp) => {
+      expenseMap[exp.category] = (expenseMap[exp.category] || 0) + exp.amount;
+    });
 
-    res.status(200).json(formatted);
+    const budgetMap = {};
+    budgets.forEach((b) => {
+      budgetMap[b.category] = b.amount;
+    });
+
+    // Combine all categories from both budgets and expenses
+    const categories = new Set([
+      ...Object.keys(expenseMap),
+      ...Object.keys(budgetMap),
+    ]);
+
+    const comparison = [];
+    let totalSpent = 0;
+    let totalBudget = 0;
+
+    categories.forEach((category) => {
+      const spent = Math.round(expenseMap[category] || 0);
+      const budgeted = Math.round(budgetMap[category] || 0);
+
+      totalSpent += spent;
+      totalBudget += budgeted;
+
+      comparison.push({
+        category,
+        spent,
+        budgeted,
+        difference: spent - budgeted,
+        status: spent > budgeted ? "Over Budget" : "Under Budget",
+      });
+    });
+
+    res.status(200).json({
+      currentMonth,
+      year,
+      totalSpent,
+      totalBudget,
+      remaining: totalBudget - totalSpent,
+      comparison,
+    });
   } catch (err) {
-    console.error("Error fetching reports:", err);
-    res.status(500).json({ message: "Internal Server Error" });
+    console.error("Error generating Mongo report", err);
+    res.status(500).json({ message: "Error generating report" });
   }
 };
 
