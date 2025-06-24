@@ -186,7 +186,10 @@ const getMonthlyReports = async (req, res) => {
       date: { $gte: startOfMonth, $lte: endOfMonth },
     });
 
-    const budgets = await Budget.find({ userId });
+    const budgets = await Budget.find({
+      userId,
+      createdAt: { $gte: startOfMonth, $lte: endOfMonth },
+    });
 
     const expenseMap = {};
     expenses.forEach((exp) => {
@@ -195,17 +198,17 @@ const getMonthlyReports = async (req, res) => {
 
     const budgetMap = {};
     budgets.forEach((b) => {
-      budgetMap[b.category] = (budgetMap[b.category] || 0) + b.amount;
+      budgetMap[b.category] = (budgetMap[b.category] || 0) + b.limit;
     });
-
-    const allCategories = new Set([
-      ...Object.keys(budgetMap),
-      ...Object.keys(expenseMap),
-    ]);
 
     const comparison = [];
     let totalSpent = 0;
     let totalBudget = 0;
+
+    const allCategories = new Set([
+      ...Object.keys(expenseMap),
+      ...Object.keys(budgetMap),
+    ]);
 
     allCategories.forEach((category) => {
       const spent = expenseMap[category] || 0;
